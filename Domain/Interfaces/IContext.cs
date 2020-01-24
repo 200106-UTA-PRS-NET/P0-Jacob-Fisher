@@ -38,5 +38,10 @@ namespace Domain.Interfaces
         void SetSize(string size);
         public IEnumerable<User> GetUsers();
         void AddPizzaToOrder(uint count);
+        IEnumerable<Sales> GetSalesMonths();
+        IEnumerable<Sales> GetSalesDays();
+        IEnumerable<Sales> GetSalesMonths(int numMonths);
+        IEnumerable<Sales> GetSalesDays(int numDays);
+        int GetInventory(string toppingName);
     }
 }

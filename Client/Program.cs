@@ -49,6 +49,7 @@ namespace Client
             actions.Add("register", Register);
             actions.Add("sales", Sales);
             actions.Add("users", Users);
+            actions.Add("inventory", SelectorGenerator(Inventory, s => { Console.WriteLine(context.GetInventory(s)); }, "topping"));
             #endregion
             Console.WriteLine("Welcome to Revature Pizza Portal");
             Console.WriteLine("Valid commands are listed below.");
@@ -82,9 +83,105 @@ namespace Client
             }
         }
 
+        private static IEnumerable<string> Inventory()
+        {
+            if (context.LoggedIn == null || !context.LoggedIn.IsStore)
+            {
+                throw new InvalidOperationException("You must be logged in as a store to view inventory");
+            }
+            return context.GetToppings();
+        }
+
         private static void Sales(string modifier)
         {
-            throw new NotImplementedException();
+            if (context.LoggedIn == null || !context.LoggedIn.IsStore)
+            {
+                throw new InvalidOperationException("You must be logged in as a store to view sales");
+            }
+            ActionDict actions = new ActionDict();
+
+            foreach (var command in new string[] { "day", "d" })
+            {
+                actions.Add(command, SalesByDay);
+            }
+            foreach (var command in new string[] { "month", "m" })
+            {
+                actions.Add(command, SalesByMonth);
+            }
+            actions.Add("cancel", () => { });
+            string []sep;
+            if(modifier == null)
+            {
+                sep = prompt("{[m]onth|[d]ay} (count)").Split(null, 2);
+            } else { sep = modifier.Split(null, 2); }
+            while (true)
+            {
+                sep[0] = sep[0].ToLower();
+                try
+                {
+                    actions[sep[0]](sep.ElementAtOrDefault(1));
+                    break;
+                }
+                catch (KeyNotFoundException)
+                {
+                    InvalidCommand(sep[0], actions);
+                }
+                catch (InvalidOperationException e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+                catch (PizzaBoxException e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+                catch (NotImplementedException)
+                {
+                    Console.WriteLine($"The functionality of {sep[0]} is not available yet. Please try again in the future.");
+                }
+                sep = prompt("{[m]onth|[d]ay} (count)").Split(null, 2);
+            }
+        }
+
+        private static void SalesByMonth(string months)
+        {
+            int monthCount;
+            try
+            {
+                monthCount = Int32.Parse(months);
+            } catch (FormatException)
+            {
+                monthCount = 12;
+            } catch (ArgumentNullException)
+            {
+                monthCount = 12;
+            }
+            Console.WriteLine("Month\tValues\tPizzas");
+            foreach (var sales in context.GetSalesMonths(monthCount))
+            {
+                Console.WriteLine($"{sales.Time.ToString("yyyy-MM")}\t{sales.Value}\t{sales.NumPizzas}");
+            }
+        }
+
+        private static void SalesByDay(string days)
+        {
+            int dayCount;
+            try
+            {
+                dayCount = Int32.Parse(days);
+            }
+            catch (FormatException)
+            {
+                dayCount = 30;
+            }
+            catch (ArgumentNullException)
+            {
+                dayCount = 30;
+            }
+            Console.WriteLine("Date\tValues\tPizzas");
+            foreach (var sales in context.GetSalesDays(dayCount))
+            {
+                Console.WriteLine($"{sales.Time.ToString("yyyy-MM-dd")}\t{sales.Value}\t{sales.NumPizzas}");
+            }
         }
 
         private static void Users()
@@ -140,6 +237,7 @@ namespace Client
             }
             string pass = prompt("Enter Password"); // TODO: Mask password, hash password
             context.Register(uname, pass);
+            context.Login(uname, pass);
         }
 
         private static void InvalidCommand(string command, ActionDict actions)
@@ -193,6 +291,7 @@ namespace Client
             {
                 actions.Add(command, Custom);
             }
+            actions.Add("preview", Preview);
             actions.Add("confirm", Confirm);
             actions.Add("cancel", Cancel);
             context.NewOrder();
@@ -366,13 +465,13 @@ namespace Client
             }
             actions.Add("remove", SelectorGenerator(()=>from topping in context.PreviewPizza().Toppings select topping.Name, context.RemoveTopping, "topping"));
             actions.Add("confirm", ConfirmPizza);
+            actions.Add("preview", PreviewPizza);
             actions.Add("cancel", context.CancelPizza);
-            context.NewOrder();
             IPizza preview;
             while (context.InPizza)
             {
                 preview = context.PreviewPizza();
-                string[] sep = prompt($"{preview.Toppings.Count()} Topping {preview.Size} Pizza @ {preview.Price:C}").Split(null, 2);
+                string[] sep = prompt($"{preview.Toppings.Count()} Topping {preview.Size.Name} Pizza @ {preview.Price:C}").Split(null, 2);
                 sep[0] = sep[0].ToLower();
                 try
                 {

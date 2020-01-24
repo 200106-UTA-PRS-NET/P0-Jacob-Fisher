@@ -54,7 +54,7 @@ namespace Domain
                 throw new InvalidOperationException($"You are already logged in as {LoggedIn.Username}");
             }
             var temp = (from login in db.Logins
-             where login.Username == name && login.Password == password
+             where login.Username.Equals( name )&& login.Password.Equals(password)
              select login).Include(l => l.Users).Include(l => l.Store).FirstOrDefault();
             loggedIn = PizzaMapper.Map(temp);
             if(LoggedIn == null)
@@ -121,7 +121,12 @@ namespace Domain
             Models.Users users = new Users() { IdNavigation = logins };
             db.Logins.Add(logins);
             db.Users.Add(users);
+            try {
             db.SaveChanges();
+            } catch (DbUpdateException)
+            {
+                throw new PizzaBoxException("A user with that username already exists.");
+            }
         }
 
         public void Logout()
@@ -173,7 +178,7 @@ namespace Domain
         }
         public void PlaceOrder()
         {
-            PlaceOrder(true);
+            PlaceOrder(false);
         }
         public void PlaceOrder(bool ignoreInventory)
         {
@@ -224,9 +229,9 @@ namespace Domain
             {
                 db.SaveChanges();
                 currentOrder = null;
-            } catch (Exception)
+            } catch (DbUpdateException)
             {
-                Console.WriteLine("Failed to save changes to db");
+                throw new PizzaBoxException("Was unable to place order.");
             }
         }
 
@@ -255,7 +260,7 @@ namespace Domain
         }
         IPizza GetPreset(string name)
         {
-            return PizzaMapper.Map(db.Prebuilt.Include(p => p.PrebuiltToppings).First(t => t.Name == name));
+            return PizzaMapper.Map(db.Prebuilt.Include(p => p.PrebuiltToppings).Include("PrebuiltToppings.Topping").First(t => t.Name == name));
         }
         public void NewPizza()
         {
@@ -365,6 +370,69 @@ namespace Domain
             }
             currentOrder.Add(currentPizza);
             currentPizza = null;
+        }
+
+        public IEnumerable<Sales> GetSalesMonths()
+        {
+            return GetSalesMonths(12);
+        }
+                           
+        public IEnumerable<Sales> GetSalesDays()
+        {
+            return GetSalesDays(30);
+        }
+                           
+        public IEnumerable<Sales> GetSalesMonths(int numMonths)
+        {
+            if (LoggedIn == null||!IsStore)
+            {
+                throw new InvalidOperationException("Must be logged in as a store to retrieve sales.");
+            }
+            return (from order in db.Orders
+                    where ((DateTime.Now.Year - order.Ordertime.Year) * 12 + DateTime.Now.Month - order.Ordertime.Month)<numMonths
+                    select new { order, count = order.Pizza.Count() }).AsEnumerable().GroupBy(o => new DateTime(o.order.Ordertime.Year, o.order.Ordertime.Month, 1)).OrderByDescending(m => m.Key).Select(
+                                   months => new Sales()
+                                   {
+                                       Time = months.Key,
+                                       Value = months.Sum(m => m.order.Price),
+                                       NumPizzas = months.Sum(m => m.count)
+                                   });
+
+        }
+        public IEnumerable<Sales> GetSalesDays(int numDays)
+        {
+            if (LoggedIn == null || !IsStore)
+            {
+                throw new InvalidOperationException("Must be logged in as a store to retrieve sales.");
+            }
+            return (from order in db.Orders
+                    where ((DateTime.Now.Year - order.Ordertime.Year) * 365 + DateTime.Now.DayOfYear-order.Ordertime.DayOfYear) < numDays
+                    select new { order, count = order.Pizza.Count() }).AsEnumerable().GroupBy(o => new DateTime(o.order.Ordertime.Year, o.order.Ordertime.Month, o.order.Ordertime.Day)).OrderByDescending(m => m.Key).Select(
+                                   days => new Sales()
+                                   {
+                                       Time = days.Key,
+                                       Value = days.Sum(m => m.order.Price),
+                                       NumPizzas = days.Sum(m => m.count)
+                                   });
+        }
+
+        public int GetInventory(string toppingName)
+        {
+            if (!IsStore)
+            {
+                throw new InvalidOperationException("Need to be logged in as a store to get inventory.");
+            }
+            var top = GetTopping(toppingName);
+            var val =(from topping in db.ToppingInventory
+                   where topping.StoreId == loggedIn.Id && topping.ToppingId == top.Id
+                   select topping.Amount).First();
+            if (val != null)
+            {
+                return (int)val;
+            } else
+            {
+                return 0;
+            }
         }
 
         private class Nested

@@ -43,7 +43,8 @@ namespace Domain
             {
                 Id = store.Id,
                 Name = store.Name.Trim(),
-                Location = Map(store.LocationNavigation)
+                Location = Map(store.LocationNavigation),
+                Username = store.IdNavigation?.Username.Trim()
             };
         }
         internal static Domain.Logins Map(Domain.Models.Logins logins)
