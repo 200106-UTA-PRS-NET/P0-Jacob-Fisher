@@ -1,19 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using Domain.Interfaces;
+﻿using Domain.Interfaces;
 using Domain.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Collections;
 
 namespace Domain
 {
     public class ContextDBBacked : IContext
     {
-        private ContextDBBacked()
+        static readonly DbContextOptions<PizzaDbContext> options;
+        static ContextDBBacked()
         {
             var configurBuilder = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -23,9 +22,16 @@ namespace Domain
             var optionsBuilder = new DbContextOptionsBuilder<PizzaDbContext>();
             optionsBuilder.UseSqlServer(configuration.GetConnectionString("PizzaDB"));
 
-            var options = optionsBuilder.Options;
-
-            db = new PizzaDbContext(options);
+            options = optionsBuilder.Options;
+        }
+        // TODO: replace all references to DB with this
+        private PizzaDbContext ConnectDB()
+        {
+            return new PizzaDbContext(options);
+        }
+        private ContextDBBacked()
+        {
+            db = ConnectDB();
         }
         public static ContextDBBacked Context { get => Nested.instance; }
         Store location = null;
@@ -38,7 +44,7 @@ namespace Domain
         public bool InOrder => currentOrder != null;
         public bool InPizza => currentPizza != null;
 
-        private readonly PizzaDbContext db;
+        private PizzaDbContext db;
         Order currentOrder;
         Pizza currentPizza;
         Logins loggedIn;
@@ -94,6 +100,10 @@ namespace Domain
         }
         public void SetStore(string store)
         {
+            if (IsStore)
+            {
+                throw new InvalidOperationException("You cannot change stores while logged in as a store.");
+            }
             if (currentOrder != null)
             {
                 throw new InvalidOperationException("You cannot change stores while in the middle of an order.");
@@ -119,14 +129,17 @@ namespace Domain
             if (loggedIn != null) { throw new InvalidOperationException("Cannot register if already logged in."); }
             Models.Logins logins = new Models.Logins() { Username = name, Password = password };
             Models.Users users = new Users() { IdNavigation = logins };
-            db.Logins.Add(logins);
-            db.Users.Add(users);
-            try {
-            db.SaveChanges();
-            } catch (DbUpdateException)
-            {
-                throw new PizzaBoxException("A user with that username already exists.");
-            }
+                try {
+                    db.Logins.Add(logins);
+                    db.Users.Add(users);
+                    db.SaveChanges();
+                }
+                catch (DbUpdateException)
+                {
+                    db.Dispose();
+                    db = ConnectDB();
+                    throw new PizzaBoxException("A user with that username already exists.");
+                }
         }
 
         public void Logout()
@@ -231,6 +244,8 @@ namespace Domain
                 currentOrder = null;
             } catch (DbUpdateException)
             {
+                db.Dispose();
+                db = ConnectDB();
                 throw new PizzaBoxException("Was unable to place order. This is likely due to the store not having the toppings required to complete your order.");
             }
         }
@@ -260,7 +275,7 @@ namespace Domain
         }
         IPizza GetPreset(string name)
         {
-            return PizzaMapper.Map(db.Prebuilt.Include(p => p.PrebuiltToppings).Include("PrebuiltToppings.Topping").First(t => t.Name == name));
+            return PizzaMapper.Map(db.Prebuilt.Include(p => p.PrebuiltToppings).Include("PrebuiltToppings.Topping").Include(p=>p.Crust).First(t => t.Name == name));
         }
         public void NewPizza()
         {
@@ -439,7 +454,7 @@ namespace Domain
         {
             // Nested class for Singleton Pattern
             static Nested() { }
-            internal static readonly ContextDBBacked instance = new ContextDBBacked();
+            internal static ContextDBBacked instance = new ContextDBBacked();
         }
     }
 }

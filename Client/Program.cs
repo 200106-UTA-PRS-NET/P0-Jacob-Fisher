@@ -32,7 +32,7 @@ namespace Client
             }
             foreach (var command in new string[] { "loc", "location" })
             {
-                actions.Add(command, SelectorGenerator(context.GetStores, context.SetStore, "store"));
+                actions.Add(command, SelectorGenerator(Location, context.SetStore, "store"));
             }
             foreach (var command in new string[] { "new", "order" })
             {
@@ -84,6 +84,15 @@ namespace Client
                     Console.WriteLine($"The functionality of {sep[0]} is not available yet. Please try again in the future.");
                 }
             }
+        }
+
+        private static IEnumerable<string> Location()
+        {
+            if (context.LoggedIn != null && context.LoggedIn.IsStore)
+            {
+                throw new InvalidOperationException("You cannot change stores while logged in as a store.");
+            }
+            return context.GetStores();
         }
 
         private static IEnumerable<string> Inventory()
@@ -393,6 +402,7 @@ namespace Client
                 {
                     uint count = UInt32.Parse(confirm);
                     context.AddPizzaToOrder(count);
+                    break;
                 }
                 catch (System.FormatException) { }
                 catch (ArgumentOutOfRangeException) { }
