@@ -231,7 +231,7 @@ namespace Domain
                 currentOrder = null;
             } catch (DbUpdateException)
             {
-                throw new PizzaBoxException("Was unable to place order.");
+                throw new PizzaBoxException("Was unable to place order. This is likely due to the store not having the toppings required to complete your order.");
             }
         }
 
