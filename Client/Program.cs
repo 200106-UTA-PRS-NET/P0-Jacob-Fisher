@@ -34,7 +34,10 @@ namespace Client
             {
                 actions.Add(command, SelectorGenerator(context.GetStores, context.SetStore, "store"));
             }
-            actions.Add("new", Order);
+            foreach (var command in new string[] { "new", "order" })
+            {
+                actions.Add(command, Order);
+            }
             actions.Add("history", History);
             foreach (var command in new string[] { "logout", "signout" })
             {
@@ -158,7 +161,7 @@ namespace Client
             Console.WriteLine("Month\tValues\tPizzas");
             foreach (var sales in context.GetSalesMonths(monthCount))
             {
-                Console.WriteLine($"{sales.Time.ToString("yyyy-MM")}\t{sales.Value}\t{sales.NumPizzas}");
+                Console.WriteLine($"{sales.Time.ToString("yyyy-MM")}\t{sales.Value:C}\t{sales.NumPizzas}");
             }
         }
 
@@ -177,10 +180,10 @@ namespace Client
             {
                 dayCount = 30;
             }
-            Console.WriteLine("Date\tValues\tPizzas");
+            Console.WriteLine("Date\t\tValues\tPizzas");
             foreach (var sales in context.GetSalesDays(dayCount))
             {
-                Console.WriteLine($"{sales.Time.ToString("yyyy-MM-dd")}\t{sales.Value}\t{sales.NumPizzas}");
+                Console.WriteLine($"{sales.Time.ToString("yyyy-MM-dd")}\t{sales.Value:C}\t{sales.NumPizzas}");
             }
         }
 
@@ -201,7 +204,7 @@ namespace Client
         {
             IOrder order = context.PreviewOrder();
             if (order != null) {
-            Console.WriteLine($"{order.Price}");
+            Console.WriteLine($"{order.Price:C}");
             foreach (var pizza in order.Pizzas)
             {
                 Console.WriteLine(pizza.ToString());
@@ -438,7 +441,7 @@ namespace Client
             Console.WriteLine($"Price\t\t|#Pizzas\t|{((isUser) ? "Store" : "User")}");
             foreach(var order in context.OrderHistory())
             {
-                Console.WriteLine($"{order.Price}\t\t|{order.Pizzas.Count()}\t\t|{((isUser)?order.Store.Name:order.User.Username)}");
+                Console.WriteLine($"{order.Price:C}\t\t|{order.Pizzas.Count()}\t\t|{((isUser)?order.Store.Name:order.User.Username)}");
                 i++;
                 if (i > 20) { break; }
             }
